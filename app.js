@@ -3,7 +3,6 @@ var program             = require('commander'),
     pkg                 = require( path.join(__dirname, 'package.json') );
     raml                = require('raml-js-parser'),
     fs                  = require('fs'),
-    data                = fs.readFileSync('raml/services.raml', 'utf8'),
     stripJsonComments   = require('strip-json-comments'),
     express             = require('express'),
     randomWorld         = require('random-world'),
