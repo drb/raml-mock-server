@@ -1,0 +1,21 @@
+{
+  "name": "raml-mocker",
+  "version": "1.0.1",
+  "description": "Mocker service for RAML files",
+  "main": "app.js",
+  "dependencies": {
+    "chance": "^0.7.6",
+    "commander": "^2.8.1",
+    "express": "^4.13.1",
+    "js-yaml": "^3.3.1",
+    "random-world": "git://github.com/drb/random-world.git#master",
+    "strip-json-comments": "^1.0.2",
+    "underscore": "^1.8.3"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
