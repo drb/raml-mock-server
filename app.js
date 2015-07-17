@@ -1,5 +1,5 @@
 /**
- * raml-mocker
+ * raml-mock-server
  * 
  * @type {[type]}
  */
@@ -157,8 +157,8 @@ function makeEndpoints (data) {
                         }
 
                         // limit the response data
-                        if (_.has(requestParams, 'limit')) {
-                            mock = mock.slice(0, +requestParams.limit)
+                        if (_.has(requestParams, 'limit') && _.isArray(mock)) {
+                            mock = mock.slice(0, +requestParams.limit);
                         }
 
                         // set headers for the response
