@@ -1,7 +1,7 @@
 {
   "name": "raml-mocker",
   "version": "1.0.1",
-  "description": "Mocker service for RAML files",
+  "description": "Mocker service for RAML files.",
   "main": "app.js",
   "dependencies": {
     "chance": "^0.7.6",
@@ -16,6 +16,20 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC"
+  "author": "Dave Bullough <dave.bullough@gmail.com> (http://pacosystems.com/)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/drb/raml-mocker.git"
+  },
+  "keywords": [
+    "raml",
+    "mock",
+    "api",
+    "mocker"
+  ],
+  "bugs": {
+    "url": "https://github.com/drb/raml-mocker/issues"
+  },
+  "homepage": "https://github.com/drb/raml-mocker"
 }

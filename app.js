@@ -1,3 +1,8 @@
+/**
+ * raml-mocker
+ * 
+ * @type {[type]}
+ */
 var program             = require('commander'),
     path                = require('path'),
     pkg                 = require( path.join(__dirname, 'package.json') );
@@ -8,7 +13,8 @@ var program             = require('commander'),
     randomWorld         = require('random-world'),
     _                   = require('underscore'),
     app                 = express(),
-    port                = 0,
+    // port should be set on the CLI but will default to 3000
+    port                = 3000,
     responses           = {
         contentTypes: {
             json: 'application/json',
@@ -48,7 +54,7 @@ if (typeof program.source === 'undefined') {
    process.exit(1);
 }
 
-port = program.port || 3000;
+port = program.port;
 
 
 function makeEndpoints (data) {
@@ -73,8 +79,9 @@ function makeEndpoints (data) {
 
                         console.log('[%s]', method.method.toUpperCase(), route, req.url);
 
-                        var headers = {
-                                'X-Saddo': 123
+                        var requestParams = req.query,
+                            headers = {
+                                'X-RAML-Mocker': "Hello."
                             },
                             mock = {
                                 MockingData: false,
@@ -92,12 +99,74 @@ function makeEndpoints (data) {
 
                         // default to the json response - this is probably not very useful
                         } else if (method.responses[responses.statuses.OK].body[responses.contentTypes.json]) {
-
-                            mock = stripJsonComments(method.responses[responses.statuses.OK].body[responses.contentTypes.json]);
+                            mock = stripJsonComments(
+                                method.responses[responses.statuses.OK].body[responses.contentTypes.json]
+                            );
                         }
 
-                        // res.setHeaders(headers);
-                        res.json(mock);
+                        // attempt to get the appropriate headers from the RAML
+                        if (method.responses[responses.statuses.OK].headers) {
+
+                            // merge the headers from the RAML spec with the defaults
+                            headers = _.defaults(
+                                headers,
+                                method.responses[responses.statuses.OK].headers
+                            );
+
+                            // because they're raml objects, we need to assign a real value to the header instead
+                            // of a native object
+                            _.each(headers, function(header, val) {
+
+                                var pages = 1, 
+                                    page = 1,
+                                    limit, 
+                                    total;
+
+                                if (requestParams.page) {
+                                    page = requestParams.page;
+                                }
+
+                                if (requestParams.limit) {
+                                    limit = requestParams.limit;
+                                }
+
+                                if (limit && page) {
+                                    pages = mock.length / limit;
+                                }
+
+                                // try adding the example, if set
+                                if (_.isObject(header)) {
+                                    headers[val] = val.example || 0;
+                                }
+
+                                switch (val.toLowerCase()) {
+                                    case 'x-pagination-total-pages':
+                                        headers[val] = pages;
+                                        break;
+                                    case 'x-pagination-current-page':
+                                        headers[val] = page;
+                                        break;
+                                    case 'x-pagination-per-page':
+                                        headers[val] = limit;
+                                        break;
+                                    case 'x-pagination-total-entries':
+                                        headers[val] = mock.length;
+                                        break;
+                                }
+                            });
+                        }
+
+                        // limit the response data
+                        if (_.has(requestParams, 'limit')) {
+                            mock = mock.slice(0, +requestParams.limit)
+                        }
+
+                        // set headers for the response
+                        res.set(headers);
+                        res.writeHead(200, {
+                            'Content-Type': 'application/json'
+                        });
+                        res.end(JSON.stringify(mock));
                     });
                 });
             }
@@ -119,7 +188,8 @@ raml.loadFile(program.source).then(function(data) {
 
 
 var server = app.listen(port, function () {
-  var host = server.address().address;
-  var port = server.address().port;
-  console.log('RAML mocker listening at http://%s:%s', host, port);
+    app.disable('x-powered-by');
+    var host = server.address().address;
+    var port = server.address().port;
+    console.log('RAML mocker listening at http://%s:%s', host, port);
 });
