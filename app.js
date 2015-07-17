@@ -6,7 +6,7 @@
 var program             = require('commander'),
     path                = require('path'),
     pkg                 = require( path.join(__dirname, 'package.json') );
-    raml                = require('raml-js-parser'),
+    raml                = require('raml-parser'),
     fs                  = require('fs'),
     stripJsonComments   = require('strip-json-comments'),
     express             = require('express'),
