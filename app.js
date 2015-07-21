@@ -12,6 +12,12 @@ var program             = require('commander'),
     express             = require('express'),
     randomWorld         = require('random-world'),
     _                   = require('underscore'),
+    cors                = require('cors'),
+    // no caching of the data (default is to serve random payloads every time)
+    cacheLib            = require(path.resolve(path.join(__dirname, 'lib/cache'))),
+    cache               = false,
+    cacheId             = false,
+    // set up the app
     app                 = express(),
     // port should be set on the CLI but will default to 3000
     port                = 3000,
@@ -40,6 +46,7 @@ program
     .description('Starts a standalone server for mocking data on endpoints defined by RAML files.')
     .option('-p, --port <port>', 'Port on which to listen to (defaults to 3000)', parseInt)
     .option('-s, --source <source>', 'Path to the source RAML file')
+    .option('-c, --cacheid <cache id>', 'Identifier to use for caching purposes - off by default (data will be random on each request)')
     .parse(process.argv);
 
 if (typeof program.port === 'undefined') {
@@ -54,8 +61,20 @@ if (typeof program.source === 'undefined') {
    process.exit(1);
 }
 
+if (typeof program.cacheid !== 'undefined') {
+    cacheId = program.cacheid;
+    cache = cacheLib(cacheId);
+    console.log('Using cache with id %s', cacheId);
+}
+
+// set port
 port = program.port;
 
+// need to set CORs up
+cors({
+    credentials: true,
+    origin: true
+});
 
 function makeEndpoints (data) {
 
@@ -67,107 +86,137 @@ function makeEndpoints (data) {
         resourceCollection.forEach(function (resource) {
 
             var hasTraits = resources.is,
-                route = prefix + resource.relativeUri;
+                route = prefix + resource.relativeUri,
+                httpVerb = '';
 
             if (resource.methods) {
 
                 resource.methods.forEach(function(method) {
 
-                    route = route.replace(/\{/, ':').replace('\}', '');
+                    route       = route.replace(/\{/, ':').replace('\}', '');
+                    httpVerb    = method.method.toLowerCase();
 
-                    app[method.method](route, function (req, res) {
+                    try {
+                        app[httpVerb](route, function (req, res) {
 
-                        console.log('[%s]', method.method.toUpperCase(), route, req.url);
+                            console.log('[%s]', httpVerb.toUpperCase(), route, 'cache key?', cacheId);
 
-                        var requestParams = req.query,
-                            headers = {
-                                'X-RAML-Mocker': "Hello."
-                            },
-                            mock = {
-                                MockingData: false,
-                                Status: "Please add application/mock to the RAML responses array for this method."
-                            };
+                            var requestParams = req.query,
+                                headers = {
+                                    'X-RAML-Mocker': "Eh up!",
+                                    'X-RAML-Cache': cacheId
+                                },
+                                mock = {
+                                    MockingData: false,
+                                    Status: "Please add application/mock to the RAML responses array for this method."
+                                };
 
-                        // attempt to get the mocking data
-                        if (method.responses[responses.statuses.OK].body[responses.contentTypes.mock]) {
-                            mock = method
-                                    .responses[responses.statuses.OK]
-                                    .body[responses.contentTypes.mock]
-                                    .example;
+                            // attempt to get the mocking data
+                            if (method.responses[responses.statuses.OK].body[responses.contentTypes.mock]) {
 
-                            mock = randomWorld.fromMock(mock);
+                                //
+                                if (cacheId && cache.has(route)) {
+                                    console.log("looking in cache for", route);
+                                    mock = cache.get(route);
+                                    console.log("found it!");
+                                } else {
+                                    mock = method
+                                        .responses[responses.statuses.OK]
+                                        .body[responses.contentTypes.mock]
+                                        .example;
 
-                        // default to the json response - this is probably not very useful
-                        } else if (method.responses[responses.statuses.OK].body[responses.contentTypes.json]) {
-                            mock = stripJsonComments(
-                                method.responses[responses.statuses.OK].body[responses.contentTypes.json]
-                            );
-                        }
+                                    mock = randomWorld.fromMock(mock);
 
-                        // attempt to get the appropriate headers from the RAML
-                        if (method.responses[responses.statuses.OK].headers) {
+                                    if (cacheId) {
+                                        try {
+                                            cache.set(route, mock);    
+                                        } catch (e) {
+                                            console.error('Error caching data %s', e);
+                                        }
+                                    }
+                                }
 
-                            // merge the headers from the RAML spec with the defaults
-                            headers = _.defaults(
-                                headers,
-                                method.responses[responses.statuses.OK].headers
-                            );
+                            // default to the json response - this is probably not very useful
+                            } else if (method.responses[responses.statuses.OK].body[responses.contentTypes.json]) {
+                                mock = stripJsonComments(
+                                    method.responses[responses.statuses.OK].body[responses.contentTypes.json]
+                                );
+                            }
 
-                            // because they're raml objects, we need to assign a real value to the header instead
-                            // of a native object
-                            _.each(headers, function(header, val) {
+                            // attempt to get the appropriate headers from the RAML
+                            if (method.responses[responses.statuses.OK].headers) {
 
                                 var pages = 1, 
                                     page = 1,
-                                    limit, 
+                                    limit = 10, 
                                     total;
 
-                                if (requestParams.page) {
-                                    page = requestParams.page;
-                                }
+                                // merge the headers from the RAML spec with the defaults
+                                headers = _.defaults(
+                                    headers,
+                                    method.responses[responses.statuses.OK].headers
+                                );
 
-                                if (requestParams.limit) {
-                                    limit = requestParams.limit;
-                                }
+                                // because they're raml objects, we need to assign a real value to the header instead
+                                // of a native object
+                                _.each(headers, function(header, val) {
 
-                                if (limit && page) {
-                                    pages = mock.length / limit;
-                                }
+                                    if (requestParams.page) {
+                                        page = requestParams.page;
+                                    }
 
-                                // try adding the example, if set
-                                if (_.isObject(header)) {
-                                    headers[val] = val.example || 0;
-                                }
+                                    if (requestParams.limit) {
+                                        limit = requestParams.limit;
+                                    }
 
-                                switch (val.toLowerCase()) {
-                                    case 'x-pagination-total-pages':
-                                        headers[val] = pages;
-                                        break;
-                                    case 'x-pagination-current-page':
-                                        headers[val] = page;
-                                        break;
-                                    case 'x-pagination-per-page':
-                                        headers[val] = limit;
-                                        break;
-                                    case 'x-pagination-total-entries':
-                                        headers[val] = mock.length;
-                                        break;
-                                }
+                                    if (limit && page) {
+                                        pages = mock.length / limit;
+                                    }
+
+                                    // try adding the example, if set
+                                    if (_.isObject(header)) {
+                                        headers[val] = val.example || 0;
+                                    }
+
+                                    switch (val.toLowerCase()) {
+                                        case 'x-pagination-total-pages':
+                                            headers[val] = pages;
+                                            break;
+                                        case 'x-pagination-current-page':
+                                            headers[val] = page;
+                                            break;
+                                        case 'x-pagination-per-page':
+                                            headers[val] = limit;
+                                            break;
+                                        case 'x-pagination-total-entries':
+                                            headers[val] = mock.length;
+                                            break;
+                                    }
+                                });
+                            }
+
+                            // limit the response data
+                            if (_.has(requestParams, 'limit') && _.isArray(mock)) {
+
+                                var p = page - 1,
+                                    limit = limit;
+                                    start = (p * limit),
+                                    end = (+start + +limit);
+
+                                console.log("slicing data... page: %s limit: %s = slice(%s, %s)", page, limit, start, end);
+                                mock = mock.slice(start, end);
+                            }
+
+                            // set headers for the response
+                            res.set(headers);
+                            res.writeHead(200, {
+                                'Content-Type': 'application/json'
                             });
-                        }
-
-                        // limit the response data
-                        if (_.has(requestParams, 'limit') && _.isArray(mock)) {
-                            mock = mock.slice(0, +requestParams.limit);
-                        }
-
-                        // set headers for the response
-                        res.set(headers);
-                        res.writeHead(200, {
-                            'Content-Type': 'application/json'
+                            res.end(JSON.stringify(mock));
                         });
-                        res.end(JSON.stringify(mock));
-                    });
+                    } catch (e) {
+                        console.error(e);
+                    }
                 });
             }
 
@@ -189,6 +238,7 @@ raml.loadFile(program.source).then(function(data) {
 
 var server = app.listen(port, function () {
     app.disable('x-powered-by');
+    app.use(cors());
     var host = server.address().address;
     var port = server.address().port;
     console.log('RAML mocker listening at http://%s:%s', host, port);
