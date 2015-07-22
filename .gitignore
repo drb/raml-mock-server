@@ -2,3 +2,4 @@
 node_modules/
 /raml
 npm-debug.log
+cache/*.json
