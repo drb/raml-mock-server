@@ -31,7 +31,7 @@ var program             = require('commander'),
         },
         statuses: {
             OK:         "200",
-            NotFound:   "204",
+            NotFound:   "404",
             BadRequest: "400",
             NoContent:  "204",
             Conflict:   "409"
@@ -253,9 +253,12 @@ function makeEndpoints (data) {
                                     break;
                                 case 'PATCH':
 
-                                    // console.log("got a PATCH", requestParams);
+                                    console.log("got a PATCH", requestParams, req.url);
 
                                     responseCode = responses.statuses.NoContent;
+
+                                    // no content type
+                                    delete headers['Content-type'];
                                     
                                     // test cache for the data
                                     if (cache.has(cacheRoute)) {
@@ -271,9 +274,6 @@ function makeEndpoints (data) {
 
                                         // reset the data
                                         cache.set(cacheRoute, mock);
-
-                                        // no content type
-                                        delete headers['Content-type'];
                                     } else {
                                         responseCode = responses.statuses.NotFound;
                                     }
@@ -305,7 +305,7 @@ function makeEndpoints (data) {
 
                             // set headers for the response
                             res.set(headers);
-                            res.writeHead(responseCode, {});
+                            res.writeHead(responseCode);
                             res.end(responsePayload);
                         });
 
