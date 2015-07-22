@@ -4,6 +4,7 @@
   "description": "Mocker service for RAML files.",
   "main": "app.js",
   "dependencies": {
+    "body-parser": "^1.13.2",
     "commander": "^2.8.1",
     "cors": "^2.7.1",
     "express": "^4.13.1",

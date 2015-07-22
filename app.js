@@ -13,6 +13,8 @@ var program             = require('commander'),
     randomWorld         = require('random-world'),
     _                   = require('underscore'),
     cors                = require('cors'),
+    bodyParser          = require('body-parser'),
+    url                 = require('url'),
     // no caching of the data (default is to serve random payloads every time)
     cacheLib            = require(path.resolve(path.join(__dirname, 'lib/cache'))),
     cacheWriteDir       = path.resolve(path.join(__dirname, 'cache')),
@@ -105,7 +107,7 @@ function makeEndpoints (data) {
 
                             // console.log('[%s]', req.method.toUpperCase(), route, 'using cache key:', cacheId);
 
-                            var requestParams   = req.query,
+                            var requestParams   = _.defaults(req.query, req.body),
 
                                 // the parameters accepted by the service
                                 queryParameters = _.keys(method.queryParameters),
@@ -118,14 +120,14 @@ function makeEndpoints (data) {
                                 // define if the cache should be enforced
                                 ignoreCache     = req.headers['cache-control'] === 'no-cache',
 
+                                cacheRoute      = url.parse(req.url).pathname,
+
                                 // default headers
                                 headers = {
                                     'X-RAML-Mocker':    "Eh up!",
                                     'X-RAML-CacheId':   cacheId,
                                     'Content-type':     responseType
                                 },
-
-                                
 
                                 // mock data
                                 mock = {
@@ -149,8 +151,8 @@ function makeEndpoints (data) {
                                     if (method.responses[responseCode].body[responses.contentTypes.mock]) {
 
                                         //
-                                        if (cacheId && cache.has(route) && !ignoreCache) {
-                                            mock = cache.get(route);
+                                        if (cacheId && cache.has(cacheRoute) && !ignoreCache) {
+                                            mock = cache.get(cacheRoute);
                                         } else {
 
                                             mock = method
@@ -158,11 +160,12 @@ function makeEndpoints (data) {
                                                 .body[responses.contentTypes.mock]
                                                 .example;
 
+                                            // generates a mock object using the random-world lib
                                             mock = randomWorld.fromMock(mock);
 
                                             if (cacheId && !ignoreCache) {
                                                 try {
-                                                    cache.set(route, mock);    
+                                                    cache.set(cacheRoute, mock);
                                                 } catch (e) {
                                                     console.error('Error caching data %s', e);
                                                 }
@@ -249,14 +252,49 @@ function makeEndpoints (data) {
                                     responseCode = responses.statuses.OK;
                                     break;
                                 case 'PATCH':
-                                    // console.log("got a PATCH");
+
+                                    // console.log("got a PATCH", requestParams);
+
                                     responseCode = responses.statuses.NoContent;
-                                    delete headers['Content-type'];
+                                    
+                                    // test cache for the data
+                                    if (cache.has(cacheRoute)) {
+
+                                        mock = cache.get(cacheRoute);
+
+                                        if (!_.isObject(mock)) {
+                                            mock = JSON.parse(mock);
+                                        }
+
+                                        // update the data
+                                        mock = _.extend(mock, requestParams);
+
+                                        // reset the data
+                                        cache.set(cacheRoute, mock);
+
+                                        // no content type
+                                        delete headers['Content-type'];
+                                    } else {
+                                        responseCode = responses.statuses.NotFound;
+                                    }
+
                                     break;
                                 case 'DELETE':
                                     // console.log("got a DELETE");
                                     responseCode = responses.statuses.NoContent;
-                                    delete headers['Content-type'];
+                                    
+                                    // test cache for the data
+                                    if (cache.has(cacheRoute)) {
+
+                                        // reset the data
+                                        cache.remove(cacheRoute);
+
+                                        // no content type
+                                        delete headers['Content-type'];
+                                    } else {
+                                        responseCode = responses.statuses.NotFound;
+                                    }
+
                                     break;
                                 case 'PUT':
                                     // console.log("got a PUT");
@@ -294,8 +332,17 @@ raml.loadFile(program.source).then(function(data) {
 
 
 var server = app.listen(port, function () {
+
+    // remove annoying header
     app.disable('x-powered-by');
+
+    // grab any params in PUT/PATCH/POST requests bal
+    app.use(bodyParser.urlencoded({ extended: true }));
+
+    // enable CORs requests
     app.use(cors());
+
+    // debug
     var host = server.address().address;
     var port = server.address().port;
     console.log('RAML mocker listening at http://%s:%s', host, port);
