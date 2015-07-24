@@ -15,6 +15,7 @@ var program             = require('commander'),
     cors                = require('cors'),
     bodyParser          = require('body-parser'),
     url                 = require('url'),
+    os                  = require('os'), 
     // no caching of the data (default is to serve random payloads every time)
     cacheLib            = require(path.resolve(path.join(__dirname, 'lib/cache'))),
     cacheWriteDir       = path.resolve(path.join(__dirname, 'cache')),
@@ -343,7 +344,10 @@ var server = app.listen(port, function () {
     app.use(cors());
 
     // debug
-    var host = server.address().address;
-    var port = server.address().port;
+    var networkInterfaces = os.networkInterfaces(),
+        host =  _.find(networkInterfaces['en0'], function(iface){
+                    return iface.family === 'IPv4';
+                }).address;
+
     console.log('RAML mocker listening at http://%s:%s', host, port);
 });
