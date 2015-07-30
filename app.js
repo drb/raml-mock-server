@@ -39,7 +39,6 @@ var program             = require('commander'),
         }
     };
 
-
 /**
  * Listen for commandline options
  *
@@ -162,7 +161,7 @@ function makeEndpoints (data) {
                                                 .example;
 
                                             // generates a mock object using the random-world lib
-                                            mock = randomWorld.fromMock(mock);
+                                            mock = randomWorld.fromMock(randomWorld, mock);
 
                                             if (cacheId && !ignoreCache) {
                                                 try {
@@ -332,12 +331,13 @@ raml.loadFile(program.source).then(function(data) {
 }); 
 
 
+// start server
 var server = app.listen(port, function () {
 
     // remove annoying header
     app.disable('x-powered-by');
 
-    // grab any params in PUT/PATCH/POST requests bal
+    // grab any params in PUT/PATCH/POST requests
     app.use(bodyParser.urlencoded({ extended: true }));
 
     // enable CORs requests
