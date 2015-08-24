@@ -21,6 +21,8 @@ var program             = require('commander'),
     cacheWriteDir       = path.resolve(path.join(__dirname, 'cache')),
     cache               = false,
     cacheId             = false,
+    // response latency
+    latency             = 0,
     // set up the app
     app                 = express(),
     // port should be set on the CLI but will default to 3000
@@ -50,6 +52,7 @@ program
     .option('-p, --port <port>', 'Port on which to listen to (defaults to 3000)', parseInt)
     .option('-s, --source <source>', 'Path to the source RAML file')
     .option('-c, --cacheid <cache id>', 'Identifier to use for caching purposes - off by default (data will be random on each request)')
+    .option('-e, --latency <latency>', 'Emulate latency on the request (milliseconds)')
     .parse(process.argv);
 
 if (typeof program.port === 'undefined') {
@@ -67,6 +70,10 @@ if (typeof program.source === 'undefined') {
 if (typeof program.cacheid !== 'undefined') {
     cacheId = program.cacheid;
     cache = cacheLib(cacheWriteDir, cacheId);
+}
+
+if (typeof program.latency !== 'undefined') {
+    latency = program.latency;
 }
 
 // set port
@@ -103,9 +110,24 @@ function makeEndpoints (data) {
 
                     try {
 
-                        app[httpVerb](route, function (req, res) {
+                        /**
+                         * introduces simulated network latency
+                         * 
+                         * @param  {[type]}   req  [description]
+                         * @param  {[type]}   res  [description]
+                         * @param  {Function} next [description]
+                         * @return {[type]}        [description]
+                         */
+                        function emulateNetworkLatency (req, res, next) {
+                            if (latency > 0) {
+                                console.log("Emulating %sms latency on [%s][route] %sms", latency, httpVerb, route);
+                            }
+                            setTimeout(next, latency);
+                        }
 
-                            // console.log('[%s]', req.method.toUpperCase(), route, 'using cache key:', cacheId);
+                        app[httpVerb](route, emulateNetworkLatency, function (req, res) {
+
+                            console.log('[%s]', req.method.toUpperCase(), route);
 
                             var requestParams   = _.defaults(req.query, req.body),
 
