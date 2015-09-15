@@ -25,6 +25,7 @@ var program             = require('commander'),
     latency             = 0,
     //
     corsSetup           = {},
+    allowedHeaders      = false, 
     // set up the app
     app                 = express(),
     // port should be set on the CLI but will default to 3000
@@ -51,7 +52,7 @@ var program             = require('commander'),
 program
     .version(pkg.version)
     .description('Starts a standalone server for mocking data on endpoints defined by RAML files.')
-    .option('-h, --host <x-origin host name>', 'Allow x-origin requests to be handled by the CORs hander')
+    .option('-h, --headers <allowed headers>', 'Allowed CORs headers to be returned in Access-Control-Expose-Headers')
     .option('-p, --port <port>', 'Port on which to listen to (defaults to 3000)', parseInt)
     .option('-s, --source <source>', 'Path to the source RAML file')
     .option('-c, --cacheid <cache id>', 'Identifier to use for caching purposes - off by default (data will be random on each request)')
@@ -64,10 +65,8 @@ if (typeof program.port === 'undefined') {
    process.exit(1);
 }
 
-if (typeof program.host !== 'undefined') {
-    corsSetup = {
-        origin: program.host
-    };
+if (typeof program.headers !== 'undefined') {
+    allowedHeaders = program.headers;
 }
 
 if (typeof program.source === 'undefined') {
@@ -165,6 +164,11 @@ function makeEndpoints (data) {
                                     MockingData: false,
                                     Status: "Please add application/mock to the RAML responses array for this method."
                                 };
+
+                            // only set allowed headers (whitelist of allowed CORs headers if suppled on the CLI)
+                            if(allowedHeaders) {
+                                headers['Access-Control-Expose-Headers'] = allowedHeaders;  
+                            }
 
                             // remove any params that aren't explicitly defined by the service
                             requestParams = _.pick(requestParams, queryParameters);
