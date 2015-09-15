@@ -23,6 +23,8 @@ var program             = require('commander'),
     cacheId             = false,
     // response latency
     latency             = 0,
+    //
+    corsSetup           = {},
     // set up the app
     app                 = express(),
     // port should be set on the CLI but will default to 3000
@@ -49,6 +51,7 @@ var program             = require('commander'),
 program
     .version(pkg.version)
     .description('Starts a standalone server for mocking data on endpoints defined by RAML files.')
+    .option('-h, --host <x-origin host name>', 'Allow x-origin requests to be handled by the CORs hander')
     .option('-p, --port <port>', 'Port on which to listen to (defaults to 3000)', parseInt)
     .option('-s, --source <source>', 'Path to the source RAML file')
     .option('-c, --cacheid <cache id>', 'Identifier to use for caching purposes - off by default (data will be random on each request)')
@@ -59,6 +62,12 @@ if (typeof program.port === 'undefined') {
    console.error('No port provided.');
    program.outputHelp();
    process.exit(1);
+}
+
+if (typeof program.host !== 'undefined') {
+    corsSetup = {
+        origin: program.host
+    };
 }
 
 if (typeof program.source === 'undefined') {
@@ -356,6 +365,12 @@ raml.loadFile(program.source).then(function(data) {
 // start server
 var server = app.listen(port, function () {
 
+    // debug
+    var networkInterfaces = os.networkInterfaces(),
+        host =  _.find(networkInterfaces['en0'], function(iface){
+                    return iface.family === 'IPv4';
+                }).address;
+
     // remove annoying header
     app.disable('x-powered-by');
 
@@ -363,13 +378,7 @@ var server = app.listen(port, function () {
     app.use(bodyParser.urlencoded({ extended: true }));
 
     // enable CORs requests
-    app.use(cors());
-
-    // debug
-    var networkInterfaces = os.networkInterfaces(),
-        host =  _.find(networkInterfaces['en0'], function(iface){
-                    return iface.family === 'IPv4';
-                }).address;
+    app.use(cors({origin: true, credentials: true}));
 
     console.log('RAML mocker listening at http://%s:%s', host, port);
 });
